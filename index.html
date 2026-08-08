@@ -266,6 +266,8 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
   .table-scroll { overflow-x:auto; }
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -516,7 +518,9 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
     <div class="table-scroll">
       <table>
         <thead><tr>
+          <th style="width:36px;text-align:center">#</th>
           <th data-sort="inst">College</th>
+          <th data-sort="state">State</th>
           <th data-sort="course">Course</th>
           <th data-sort="quota">Quota</th>
           <th data-sort="cat">Category</th>
@@ -529,7 +533,7 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
           <th>Confidence</th>
         </tr></thead>
         <tbody id="predictorBody">
-          <tr><td colspan="11"><div class="empty"><div class="empty-icon">⟿</div><div>Enter a rank above to see eligible colleges</div></div></td></tr>
+          <tr><td colspan="13"><div class="empty"><div class="empty-icon">⟿</div><div>Enter a rank above to see eligible colleges</div></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -616,9 +620,10 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
     <div class="table-scroll">
       <table>
         <thead><tr>
-          <th data-exp-sort="inst">College</th><th data-exp-sort="course">Course</th><th data-exp-sort="quota">Quota</th><th data-exp-sort="cat">Category</th>
+          <th style="width:36px;text-align:center">#</th>
+          <th data-exp-sort="inst">College</th><th data-exp-sort="state">State</th><th data-exp-sort="course">Course</th><th data-exp-sort="quota">Quota</th><th data-exp-sort="cat">Category</th>
           <th data-exp-sort="seats">Seats</th><th data-exp-sort="open25">Opening '25</th><th data-exp-sort="close25">Closing '25</th>
-          <th data-exp-sort="close26">Pred. '26</th><th data-exp-sort="safe">Safe Rank</th><th>Confidence</th>
+          <th data-exp-sort="close26">Pred. '26</th><th data-exp-sort="safe">Safe Rank</th><th style="background:#FEF3C7;color:#92400E">Round Likely</th><th>Confidence</th>
         </tr></thead>
         <tbody id="expBody"></tbody>
       </table>
@@ -847,6 +852,7 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
           <table>
             <thead>
               <tr>
+                <th style="width:36px;text-align:center">#</th>
                 <th>College</th><th>State</th><th>Quota</th><th>Category</th><th>Seats</th>
                 <th>Closing '25</th><th>Pred. '26</th><th>Safe Rank</th>
                 <th style="background:#FEF3C7;color:#92400E">Round Likely</th>
@@ -891,7 +897,7 @@ function predictRound(rank, r) {
   if (r2 && rank <= Math.round(r2*1.07)) return {round:2, label:'Round 1–2', cls:'round-12'};
   if (r3 && rank <= Math.round(r3*1.07)) return {round:3, label:'Round 2–3', cls:'round-23'};
   const ratio = rank/close26;
-  if (ratio <= 0.65) return {round:1, label:'Round 1 ★', cls:'round-1'};
+  if (ratio <= 0.65) return {round:1, label:'Round 1*', cls:'round-1'};
   if (ratio <= 0.85) return {round:2, label:'Round 1–2', cls:'round-12'};
   return {round:3, label:'Round 2–3', cls:'round-23'};
 }
@@ -950,11 +956,12 @@ function stateBadge(state) {
   return '<div style="font-size:11.5px;font-weight:500;color:var(--navy);white-space:nowrap;line-height:1.4">'+state+'</div>'
     +'<div style="margin-top:2px">'+zoneBadge(zoneOfState(state))+'</div>';
 }
-function rowHtml(r, hl, rank) {
+function rowHtml(r, hl, rank, rowNum) {
   const roundCell = (rank != null)
     ? '<td>'+roundBadge(predictRound(rank, r))+'</td>'
     : '<td><span style="color:var(--text-soft);font-size:11px">—</span></td>';
   return '<tr'+(hl?' class="safe-row"':'')+'>'
+    +'<td class="mono" style="text-align:center;color:var(--text-soft)">'+(rowNum!=null?rowNum:'')+'</td>'
     +'<td style="min-width:180px;max-width:260px;white-space:normal;word-break:break-word;line-height:1.45">'+r.inst+'</td>'
     +'<td style="min-width:100px">'+stateBadge(r.state)+'</td>'
     +'<td>'+courseBadge(r.course)+'</td>'
@@ -1127,7 +1134,7 @@ function runPredictor() {
   const f = getFilters();
 
   if (!rank || rank < 1) {
-    document.getElementById('predictorBody').innerHTML='<tr><td colspan="11"><div class="empty"><div class="empty-icon">⟿</div><div>Enter a rank above to see eligible colleges</div></div></td></tr>';
+    document.getElementById('predictorBody').innerHTML='<tr><td colspan="13"><div class="empty"><div class="empty-icon">⟿</div><div>Enter a rank above to see eligible colleges</div></div></td></tr>';
     document.getElementById('predPagination').innerHTML='';
     document.getElementById('rankZone').classList.remove('visible');
     document.getElementById('predictorChips').style.display='none';
@@ -1196,7 +1203,7 @@ function runPredictor() {
 function renderPredTable() {
   const rank = parseInt(document.getElementById('rankInput').value)||0;
   if (!predData.length) {
-    document.getElementById('predictorBody').innerHTML='<tr><td colspan="11"><div class="empty"><div class="empty-icon">😔</div><div>No colleges match — try relaxing filters</div></div></td></tr>';
+    document.getElementById('predictorBody').innerHTML='<tr><td colspan="13"><div class="empty"><div class="empty-icon">😔</div><div>No colleges match — try relaxing filters</div></div></td></tr>';
     document.getElementById('predPagination').innerHTML='';
     return;
   }
@@ -1207,9 +1214,9 @@ function renderPredTable() {
   predData.forEach((r,i) => {
     // Insert divider before first college with close26 >= rank
     if (isWindow && i>0 && predData[i-1].close26 < rank && r.close26 >= rank) {
-      rows.push('<tr style="background:#FEF9C3"><td colspan="11" style="text-align:center;font-size:11px;font-weight:700;color:var(--amber);padding:5px;letter-spacing:.06em">▲ YOUR RANK '+fmt(rank)+' — colleges above this line are just out of reach · below are accessible ▼</td></tr>');
+      rows.push('<tr style="background:#FEF9C3"><td colspan="13" style="text-align:center;font-size:11px;font-weight:700;color:var(--amber);padding:5px;letter-spacing:.06em">▲ YOUR RANK '+fmt(rank)+' — colleges above this line are just out of reach · below are accessible ▼</td></tr>');
     }
-    rows.push(rowHtml(r, r.safe>=rank, rank));
+    rows.push(rowHtml(r, r.safe>=rank, rank, i + 1));
   });
 
   // Paginate
@@ -1246,73 +1253,251 @@ const DR_EDUZONE_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAJ2C
 const DR_EDUZONE_INFO = {
   name: "Doctor Eduzone",
   tagline: "\u0938\u093e\u0935\u093f\u0927\u093e \u092f\u093e \u0915\u0932\u093e\u092e\u092f\u0940",
+  // jsPDF's built-in fonts (helvetica) have no Devanagari glyphs, so the
+  // Hindi tagline above renders as mojibake in the PDF. Embedding a custom
+  // Unicode font just for one line of tagline text isn't worth the size/
+  // complexity cost, so the PDF export uses this transliteration instead.
+  taglineLatin: "Suvidha Ya Kalamayi",
   phones: ["90171-01111", "97296-99663"],
   email: "dreduzonesocialmedia@gmail.com",
   address: "SCO-34, Mughal Canal, Karnal"
 };
 
-function buildBrandedReportHtml(title, subtitleLines, tableHtml) {
-  const info = DR_EDUZONE_INFO;
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
-  <style>
-    * { box-sizing:border-box; }
-    body { font-family:'IBM Plex Sans', Arial, sans-serif; color:#1E293B; margin:0; padding:0; }
-    .report-header { display:flex; align-items:center; gap:16px; padding:20px 28px; border-bottom:3px solid #0D9488; }
-    .report-header img { width:64px; height:64px; object-fit:contain; }
-    .report-header .brand-block .brand-title { font-size:20px; font-weight:700; color:#0F2040; }
-    .report-header .brand-block .brand-tagline { font-size:12px; color:#D97706; font-weight:600; }
-    .report-title { padding:14px 28px 4px; font-size:16px; font-weight:700; color:#0F2040; }
-    .report-subtitle { padding:0 28px 14px; font-size:12px; color:#475569; line-height:1.6; }
-    table { width:100%; border-collapse:collapse; font-size:11px; margin:0 28px; width:calc(100% - 56px); }
-    th { background:#0F2040; color:#fff; text-align:left; padding:6px 8px; font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
-    td { padding:6px 8px; border-bottom:1px solid #E2E8F0; }
-    tr:nth-child(even) td { background:#F7FAFC; }
-    .report-note { margin:16px 28px; padding:10px 14px; background:#FFFBEB; border:1px solid #FDE68A; border-radius:6px; font-size:11px; color:#92400E; line-height:1.5; }
-    .report-footer { margin-top:24px; padding:16px 28px; border-top:2px solid #0D9488; font-size:11px; color:#475569; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
-    .report-footer .col { line-height:1.6; }
-    .report-footer strong { color:#0F2040; }
-    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  </style></head><body>
-    <div class="report-header">
-      <img src="${DR_EDUZONE_LOGO}" alt="Doctor Eduzone">
-      <div class="brand-block">
-        <div class="brand-title">${info.name}</div>
-        <div class="brand-tagline">${info.tagline}</div>
-      </div>
-    </div>
-    <div class="report-title">${title}</div>
-    <div class="report-subtitle">${subtitleLines.join('<br>')}</div>
-    ${tableHtml}
-    <div class="report-note">Note: These are expected colleges on your rank as per last year's allotment of medical colleges. Allotment tally may vary this year.</div>
-    <div class="report-footer">
-      <div class="col"><strong>Call Us:</strong> ${info.phones.join(' · ')}</div>
-      <div class="col"><strong>Email:</strong> ${info.email}</div>
-      <div class="col"><strong>Office:</strong> ${info.address}</div>
-    </div>
-  </body></html>`;
-}
-
+// Data-driven PDF export using jsPDF + AutoTable.
+//
+// This intentionally does NOT screenshot any on-screen HTML. Rendering the
+// report as an off-screen DOM node and rasterizing it with html2canvas was
+// fragile: any mismatch between the assumed capture width and the actual
+// rendered width (viewport size, flex shrink, font metrics, scrollbars)
+// shifted the image and clipped columns off one or both edges -- a class of
+// bug that's very hard to fully eliminate because it depends on layout
+// details outside our control.
+//
+// Drawing the table directly from the row data with AutoTable sidesteps all
+// of that: every cell is placed by explicit page-margin math, text wraps
+// instead of overflowing, and there is no raster image to crop -- so
+// nothing can be clipped regardless of screen size or font rendering.
 function exportRowsToPdf(rows, title, subtitleLines, columns) {
   if (!rows || !rows.length) { alert('No results to export yet.'); return; }
-  let thead = '<thead><tr>' + columns.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead>';
-  let tbody = '<tbody>' + rows.map(r => '<tr>' + columns.map(c => `<td>${c.get(r) ?? ''}</td>`).join('') + '</tr>').join('') + '</tbody>';
-  const tableHtml = `<table>${thead}${tbody}</table>`;
-  const html = buildBrandedReportHtml(title, subtitleLines, tableHtml);
-  const win = window.open('', '_blank');
-  if (!win) { alert('Please allow popups to download the PDF.'); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  const img = win.document.querySelector('img');
-  const doPrint = () => { win.focus(); win.print(); };
-  if (img && !img.complete) {
-    img.addEventListener('load', doPrint, { once: true });
-    img.addEventListener('error', doPrint, { once: true });
-    setTimeout(doPrint, 1500); // fallback if load/error never fires
-  } else {
-    setTimeout(doPrint, 50);
+  if (typeof window.jspdf === 'undefined') {
+    alert('PDF export library failed to load (offline or blocked). Please check your connection and try again.');
+    return;
   }
-  win.onafterprint = () => win.close();
+
+  // Prepend a row-number column so the PDF numbering matches the numbered
+  // on-screen tables -- makes it possible to reference a specific row
+  // ("see row 12") when discussing a printed/shared copy.
+  columns = [{ label: '#', get: (r, i) => i + 1, isRowNumber: true }, ...columns];
+
+  const info = DR_EDUZONE_INFO;
+  const { jsPDF } = window.jspdf;
+  const colCount = (columns && columns.length) || 0;
+  // Wide reports (e.g. the 10-column Rank Predictor report) get more
+  // horizontal room in landscape; short ones stay portrait. Subtract the
+  // numbering column since it's narrow and shouldn't push a borderline
+  // report into landscape by itself.
+  const isWide = (colCount - 1) >= 7;
+  const doc = new jsPDF({
+    orientation: isWide ? 'landscape' : 'portrait',
+    unit: 'pt',
+    format: 'a4'
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  // Equal margin on every side (this is what "padding on both sides" was
+  // missing before) -- content never touches the page edge.
+  const margin = 28;
+  const contentWidth = pageWidth - margin * 2;
+  const navy = [15, 32, 64];
+  const teal = [13, 148, 136];
+  const amber = [217, 119, 6];
+  const slate = [71, 85, 105];
+
+  const noteText = "Note: These are expected colleges on your rank as per last year's allotment of medical colleges. Allotment tally may vary this year.";
+
+  // Draws the amber allotment-basis note box at the given y and returns
+  // its height, so callers (top-of-report and end-of-report) stay in
+  // sync with a single source of truth for the note's wording/box style.
+  const drawAllotmentNote = (yPos) => {
+    const lines = doc.splitTextToSize(noteText, contentWidth - 24);
+    const boxHeight = lines.length * 12 + 16;
+    doc.setFillColor(255, 251, 235);
+    doc.setDrawColor(253, 230, 138);
+    doc.roundedRect(margin, yPos, contentWidth, boxHeight, 4, 4, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(146, 64, 14);
+    doc.text(lines, margin + 12, yPos + 14);
+    return boxHeight;
+  };
+
+  // Fixed additive height of the compact (logo + company + title only)
+  // header used on continuation pages, kept in sync with what
+  // drawHeader(false) actually draws below. Computed as pure arithmetic
+  // (no text measurement needed since these lines are always short/fixed)
+  // so it can be handed to AutoTable's margin.top *before* the table is
+  // built, letting continuation pages reserve less space than page 1.
+  const compactHeaderHeight = margin + 42 + 18 + 16 + 10;
+
+  const drawHeader = (isFirstPage) => {
+    let y = margin;
+    try {
+      if (DR_EDUZONE_LOGO) {
+        doc.addImage(DR_EDUZONE_LOGO, 'PNG', margin, y, 32, 32);
+      }
+    } catch (e) { /* logo optional; continue without it */ }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(...navy);
+    doc.text(info.name, margin + 40, y + 14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...amber);
+    doc.text(info.taglineLatin, margin + 40, y + 27);
+    y += 42;
+    doc.setDrawColor(...teal);
+    doc.setLineWidth(2);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 18;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...navy);
+    doc.text(title, margin, y);
+    y += 16;
+
+    if (!isFirstPage) {
+      // The rank/filters/analytics/notes below only make sense once, at
+      // the top of the report -- repeating the whole block on every page
+      // (as it did before) was noisy and wasted vertical space, so
+      // continuation pages get just this compact brand header.
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(...slate);
+      doc.text('(continued)', margin, y);
+      y += 10;
+      return y;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...slate);
+    // "rows" (not "columns") is the exported dataset -- always show how
+    // many colleges the report covers, so this line doesn't depend on
+    // every caller remembering to pass a count themselves.
+    const allLines = [...(subtitleLines || []), 'Colleges in this report: ' + rows.length];
+    // Filter/analytics lines can get long (many filters chained together),
+    // so each one is wrapped to the content width instead of drawn with a
+    // single doc.text() call, which would silently run off the page edge.
+    allLines.forEach(line => {
+      const wrapped = doc.splitTextToSize(String(line), contentWidth);
+      doc.text(wrapped, margin, y);
+      y += wrapped.length * 12;
+    });
+    y += 6;
+
+    // Explains the "*" that can appear next to "Round 1" in the Round
+    // Likely column, placed above the table (not buried in the footer)
+    // so it's the first thing read before the * is encountered.
+    const starNoteText = "* Round 1 marked with an asterisk means your rank is well within last year's closing rank for that seat, making a Round 1 allotment highly likely.";
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(...amber);
+    const starNoteLines = doc.splitTextToSize(starNoteText, contentWidth);
+    doc.text(starNoteLines, margin, y);
+    y += starNoteLines.length * 10 + 8;
+
+    // The allotment-basis note used to appear only after the table
+    // (easy to miss on a scroll/print). It's drawn here too so it's the
+    // very first thing read, before any numbers in the table.
+    const noteBoxHeight = drawAllotmentNote(y);
+    y += noteBoxHeight + 10;
+
+    return y;
+  };
+
+  const startY = drawHeader(true);
+
+  const head = [columns.map(c => c.label)];
+  const body = rows.map((r, idx) => columns.map(c => String(c.get(r, idx) ?? '')));
+
+  // The "#" column stays narrow and centered; College (now index 1) gets
+  // a generous share of the width and wraps, since it's free-form text
+  // and often the longest field; every other column keeps a sensible
+  // minimum so headers like "Closing '25" or "Round Likely" never get
+  // squeezed to unreadable widths.
+  const firstColWidth = Math.min(180, contentWidth * 0.24);
+  const columnStyles = {
+    0: { cellWidth: 26, halign: 'center' },
+    1: { cellWidth: firstColWidth, halign: 'left' },
+  };
+  for (let i = 2; i < colCount; i++) {
+    columnStyles[i] = { cellWidth: 'auto', halign: 'left' };
+  }
+
+  doc.autoTable({
+    head,
+    body,
+    startY,
+    // margin.top reserves space for the header AutoTable redraws on
+    // every page it breaks onto. Page 1's full header (filters/analytics/
+    // notes) only needs to exist once, so continuation pages use the
+    // shorter compactHeaderHeight instead of reserving the same tall
+    // space startY used -- that mismatch (both reusing startY) is what
+    // previously repeated the entire header block on every page.
+    margin: { left: margin, right: margin, bottom: 60, top: compactHeaderHeight },
+    tableWidth: contentWidth,
+    styles: {
+      font: 'helvetica',
+      fontSize: 8.5,
+      cellPadding: 5,
+      overflow: 'linebreak',
+      valign: 'top',
+      lineColor: [226, 232, 240],
+      lineWidth: 0.5
+    },
+    headStyles: {
+      fillColor: navy,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8
+    },
+    alternateRowStyles: { fillColor: [247, 250, 252] },
+    columnStyles,
+    // Page 1's header was already drawn (via startY above) before the
+    // table started, so skip it here to avoid a redundant redraw; every
+    // later page gets only the compact brand header.
+    didDrawPage: (data) => { if (data.pageNumber > 1) drawHeader(false); }
+  });
+
+  let finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || startY;
+  const noteLines = doc.splitTextToSize(noteText, contentWidth - 24);
+  const noteHeight = noteLines.length * 12 + 16;
+
+  if (finalY + noteHeight + 70 > pageHeight - margin) {
+    doc.addPage();
+    finalY = drawHeader(false);
+  } else {
+    finalY += 16;
+  }
+
+  drawAllotmentNote(finalY);
+
+  const footerY = pageHeight - margin - 24;
+  doc.setDrawColor(...teal);
+  doc.setLineWidth(1.5);
+  doc.line(margin, footerY, pageWidth - margin, footerY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...slate);
+  const thirdWidth = contentWidth / 3;
+  doc.text(`Call Us: ${info.phones.join(' · ')}`, margin, footerY + 16);
+  doc.text(`Email: ${info.email}`, margin + thirdWidth, footerY + 16);
+  doc.text(`Office: ${info.address}`, margin + thirdWidth * 2, footerY + 16);
+
+  const filename = (title || 'report').replace(/[^\w\-]+/g, '_') + '.pdf';
+  doc.save(filename);
 }
 
 const HINDI_BELT_STATES = ['Uttar Pradesh','Bihar','Madhya Pradesh','Rajasthan','Haryana','Uttarakhand','Jharkhand','Chhattisgarh','Delhi','Himachal Pradesh'];
@@ -1381,8 +1566,9 @@ function filterExp() {
 
 function renderExp() {
   document.getElementById('expCount').textContent=expData.length+' entries';
-  const sl=expData.slice((expPage-1)*PER,expPage*PER);
-  document.getElementById('expBody').innerHTML=sl.length?sl.map(r=>rowHtml(r,false)).join(''):'<tr><td colspan="10"><div class="empty"><div class="empty-icon">🔍</div><div>No results</div></div></td></tr>';
+  const startIdx=(expPage-1)*PER;
+  const sl=expData.slice(startIdx,expPage*PER);
+  document.getElementById('expBody').innerHTML=sl.length?sl.map((r,i)=>rowHtml(r,false,null,startIdx+i+1)).join(''):'<tr><td colspan="13"><div class="empty"><div class="empty-icon">🔍</div><div>No results</div></div></td></tr>';
   const total=Math.ceil(expData.length/PER);
   const div=document.getElementById('expPagination');
   if(total<=1){div.innerHTML='';return;}
@@ -1399,7 +1585,48 @@ function renderExp() {
 
 document.getElementById('predDownloadPdf').addEventListener('click', () => {
   const rank = parseInt(document.getElementById('rankInput').value)||0;
-  exportRowsToPdf(predData, 'Rank Predictor Report', ['Rank entered: ' + fmt(rank)], [
+  const isWindow = document.getElementById('modeWindow').classList.contains('mode-active');
+  const modeLine = isWindow
+    ? 'View mode: ±' + document.getElementById('windowSize').value + ' Window (colleges near your rank)'
+    : 'View mode: All Eligible colleges';
+
+  // Same filter controls used by getFilters()/showActiveFilters() on
+  // screen, mirrored here so the PDF reflects every filter that shaped
+  // predData -- previously this only ever showed the rank, which was
+  // misleading whenever course/quota/category/zone/etc. were also set.
+  const f = getFilters();
+  const filterParts = [];
+  if (f.course) filterParts.push('Course: ' + f.course);
+  if (f.quota)  filterParts.push('Quota: ' + f.quota);
+  if (f.cat)    filterParts.push('Category: ' + f.cat);
+  if (f.zone)   filterParts.push('Zone: ' + f.zone);
+  if (f.state)  filterParts.push('State: ' + f.state);
+  if (f.conf)   filterParts.push('Confidence: ' + f.conf);
+  if (f.upg !== '') filterParts.push('Max Upgradation: ' + f.upg + '%');
+  if (f.seats)  filterParts.push('Min Seats: ' + f.seats);
+  const filtersLine = filterParts.length
+    ? 'Filters applied: ' + filterParts.join(' | ')
+    : 'Filters applied: None';
+
+  // Analytics: reuse the same counts already shown in the on-screen chips
+  // (predictorChips) so the PDF and dashboard never disagree.
+  let analyticsLine;
+  if (isWindow) {
+    const n = parseInt(document.getElementById('windowSize').value);
+    let sorted = [...RAW].sort((a,b)=>a.close26-b.close26);
+    sorted = applyFilters(sorted, f, rank);
+    let pivot = sorted.findIndex(r => r.close26 >= rank);
+    if (pivot === -1) pivot = sorted.length;
+    const belowCount = Math.min(sorted.length, pivot + n) - pivot;
+    const aboveCount = pivot - Math.max(0, pivot - n);
+    analyticsLine = 'Analytics: ' + belowCount + ' likely accessible | ' + aboveCount + ' just out of reach';
+  } else {
+    const safe   = predData.filter(r=>r.safe>=rank).length;
+    const likely = predData.filter(r=>r.close26>=rank&&r.safe<rank).length;
+    analyticsLine = 'Analytics: ' + safe + ' safe | ' + likely + ' likely | ' + predData.length + ' total eligible';
+  }
+
+  exportRowsToPdf(predData, 'Rank Predictor Report', ['Rank entered: ' + fmt(rank), modeLine, filtersLine, analyticsLine], [
     {label:'College', get:r=>r.inst},
     {label:'State', get:r=>r.state||'-'},
     {label:'Course', get:r=>r.course},
@@ -1414,7 +1641,38 @@ document.getElementById('predDownloadPdf').addEventListener('click', () => {
 });
 
 document.getElementById('expDownloadPdf').addEventListener('click', () => {
-  exportRowsToPdf(expData, 'College Browser Report', ['Filtered college list export'], [
+  // Build a human-readable summary of every active filter so the PDF is
+  // self-explanatory when shared/printed away from the dashboard, instead
+  // of the previous static "Filtered college list export" placeholder.
+  const filterParts = [];
+  const q = document.getElementById('expSearch').value.trim();
+  const co = document.getElementById('expCourse').value;
+  const qu = document.getElementById('expQuota').value;
+  const ca = document.getElementById('expCat').value;
+  const ez = document.getElementById('expZone').value;
+  const es = document.getElementById('expState').value;
+  const srtSelect = document.getElementById('expSort');
+  const srtLabel = srtSelect.options[srtSelect.selectedIndex].text;
+  if (q) filterParts.push('Search: "' + q + '"');
+  if (co) filterParts.push('Course: ' + co);
+  if (qu) filterParts.push('Quota: ' + qu);
+  if (ca) filterParts.push('Category: ' + ca);
+  if (ez) filterParts.push('Zone: ' + ez);
+  if (es) filterParts.push('State: ' + es);
+  const filtersLine = filterParts.length
+    ? 'Filters applied: ' + filterParts.join(' | ')
+    : 'Filters applied: None (showing all colleges)';
+
+  // Analytics: quick aggregate stats over the filtered set so the PDF
+  // gives more than just a row count -- total seats on offer and the
+  // average predicted 2026 closing rank across the listed colleges.
+  const totalSeats = expData.reduce((sum, r) => sum + (r.seats || 0), 0);
+  const avgClose26 = expData.length
+    ? Math.round(expData.reduce((sum, r) => sum + (r.close26 || 0), 0) / expData.length)
+    : 0;
+  const analyticsLine = 'Analytics: ' + totalSeats + ' total seats | Avg. predicted closing rank: ' + fmt(avgClose26);
+
+  exportRowsToPdf(expData, 'College Browser Report', [filtersLine, srtLabel, analyticsLine], [
     {label:'College', get:r=>r.inst},
     {label:'State', get:r=>r.state||'-'},
     {label:'Course', get:r=>r.course},
@@ -1705,9 +1963,15 @@ function renderTrends() {
   document.getElementById('gDownloadPdf').addEventListener('click', () => {
     const {rank, quota, course, cat} = gState;
     const summary = [
-      'Rank: ' + fmt(rank) + ' &nbsp;|&nbsp; Course: ' + course + ' &nbsp;|&nbsp; Quota: ' + quota + ' &nbsp;|&nbsp; Category: ' + cat,
-      (gState.zone ? 'Zone: ' + gState.zone + ' &nbsp;|&nbsp; ' : '') + (gState.state ? 'State: ' + gState.state : 'State: Any')
+      'Rank: ' + fmt(rank) + '  |  Course: ' + course + '  |  Quota: ' + quota + '  |  Category: ' + cat,
+      (gState.zone ? 'Zone: ' + gState.zone + '  |  ' : '') + (gState.state ? 'State: ' + gState.state : 'State: Any')
     ];
+    // Reuse the same counts already shown in the on-screen result chips
+    // (safe / Round 1 picks / total eligible) so the PDF and dashboard
+    // never disagree on the numbers.
+    const safeCount = gResults.filter(r => r.safe >= rank).length;
+    const r1Count = gResults.filter(r => predictRound(rank, r).round === 1).length;
+    summary.push('Analytics: ' + safeCount + ' safe | ' + r1Count + ' Round 1 picks | ' + gResults.length + ' total eligible');
     exportRowsToPdf(gResults, 'Probable Colleges Report', summary, [
       {label:'College', get:r=>r.inst},
       {label:'State', get:r=>r.state||'-'},
@@ -1784,15 +2048,17 @@ function renderTrends() {
     const rank = gState.rank;
     if (!gResults.length) {
       document.getElementById('gResultsBody').innerHTML =
-        '<tr><td colspan="10"><div class="empty"><div class="empty-icon">😔</div><div>No colleges found for these filters</div><div class="empty-sub" style="font-size:11px;margin-top:4px">Try a different quota or check category eligibility</div></div></td></tr>';
+        '<tr><td colspan="11"><div class="empty"><div class="empty-icon">😔</div><div>No colleges found for these filters</div><div class="empty-sub" style="font-size:11px;margin-top:4px">Try a different quota or check category eligibility</div></div></td></tr>';
       document.getElementById('gPagination').innerHTML='';
       return;
     }
-    const slice = gResults.slice((gPage-1)*GPER, gPage*GPER);
-    document.getElementById('gResultsBody').innerHTML = slice.map(r => {
+    const startIdx = (gPage-1)*GPER;
+    const slice = gResults.slice(startIdx, gPage*GPER);
+    document.getElementById('gResultsBody').innerHTML = slice.map((r,i) => {
       const {label, cls} = predictRound(rank, r);
       const isSafe = r.safe >= rank;
       return `<tr${isSafe?' class="safe-row"':''}>`+
+        `<td class="mono" style="text-align:center;color:var(--text-soft)">${startIdx+i+1}</td>`+
         `<td style="min-width:180px;max-width:260px;white-space:normal;word-break:break-word;line-height:1.45" title="${r.inst}">${r.inst}</td>`+
         `<td style="min-width:100px">${stateBadge(r.state)}</td>`+
         `<td>${quotaBadge(r.quota)}</td>`+

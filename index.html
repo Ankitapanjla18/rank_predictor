@@ -52,6 +52,7 @@ body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(-
 .content { margin-left:var(--sidebar-w); flex:1; display:flex; flex-direction:column; min-height:100vh; transition:margin-left .18s ease; min-width:0; }
 .sidebar.collapsed ~ .content { margin-left:var(--sidebar-w-collapsed); }
 .topbar { height:var(--header-h); background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:12px; position:sticky; top:0; z-index:50; }
+.prepared-for-bar { background:var(--surface2); border-bottom:1px solid var(--border); display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px 24px; position:sticky; top:var(--header-h); z-index:49; }
 .mobile-menu-btn { display:none; background:none; border:1px solid var(--border-strong); color:var(--navy); border-radius:6px; width:32px; height:32px; font-size:15px; cursor:pointer; align-items:center; justify-content:center; }
 .page-title { font-size:14px; font-weight:600; color:var(--navy); }
 .topbar-sep { flex:1; }
@@ -152,6 +153,7 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
 .round-badge.round-12 { background:#FEF3C7; color:#92400E; }
 .round-badge.round-23 { background:#FEE2E2; color:#991B1B; }
 .round-badge.round-na { background:#F1F5F9; color:#64748B; }
+.round-badge.round-low { background:#FFEDD5; color:#9A3412; }
 
 /* FILTER BAR */
 .filter-bar { display:flex; gap:8px; padding:10px 16px; background:var(--surface2); border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; }
@@ -255,6 +257,7 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
   .content, .sidebar.collapsed ~ .content { margin-left:0; }
   .page { padding:14px 12px 24px; }
   .topbar { padding:0 12px; }
+  .prepared-for-bar { padding:8px 12px; }
   .kpi-row { grid-template-columns:1fr 1fr; gap:8px; }
   .filter-bar { flex-wrap:wrap; }
   .filter-bar select, .filter-bar input { width:100% !important; max-width:none; }
@@ -296,6 +299,11 @@ tbody tr.safe-row:hover td { background:#DCFCE7; }
   <div class="page-title" id="pageTitle">Overview</div>
   <div class="topbar-sep"></div>
   <div class="session-info"><div class="dot-live"></div>2,350 college-category groups tracked</div>
+</div>
+<div class="prepared-for-bar" id="preparedForBar" style="display:none" title="Included in every downloaded PDF report so it reads as prepared specifically for this student">
+  <span style="font-size:11px;color:var(--text-soft);white-space:nowrap;font-weight:600">Prepared for:</span>
+  <input type="text" id="studentName" placeholder="Student name" style="width:160px;padding:6px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);border-radius:5px;outline:none">
+  <input type="tel" id="studentPhone" placeholder="Phone number" style="width:140px;padding:6px 9px;font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--surface);border:1px solid var(--border-strong);color:var(--text);border-radius:5px;outline:none">
 </div>
 
 <!-- OVERVIEW -->
@@ -889,13 +897,35 @@ const fmtS = n => n>=100000?(n/100000).toFixed(1)+'L':n>=1000?(n/1000).toFixed(0
 
 // Round prediction: uses real round-wise closing data when available (round_logic:'data'),
 // else falls back to a rank-ratio estimate against the overall predicted closing rank.
+//
+// LOW_PROBABILITY_BUFFER_PCT: seats added by medical colleges/councils tend
+// to grow most years, so a college whose last-cycle closing rank was only
+// slightly tighter than the student's rank isn't a hard "no" -- there's a
+// real, if reduced, chance of a seat opening up. Rather than dropping such
+// colleges from the list entirely (the old "Not Eligible" cutoff), they're
+// now kept and flagged "Low Probability" if they fall within this percentage
+// band below the student's rank.
+const LOW_PROBABILITY_BUFFER_PCT = 0.026;
+function lowProbabilityFloor(rank) {
+  return Math.floor(rank * (1 - LOW_PROBABILITY_BUFFER_PCT) / 100) * 100;
+}
+
 function predictRound(rank, r) {
   const close26 = r.close26;
-  if (rank > close26) return {round:null, label:'Not Eligible', cls:'round-na'};
+  if (rank > close26) {
+    // Within the buffer band: rank is worse than last year's closing rank,
+    // but only by a small margin -- flag as a long shot instead of
+    // excluding outright.
+    if (close26 >= lowProbabilityFloor(rank)) {
+      return {round:null, label:'Low Probability', cls:'round-low'};
+    }
+    return {round:null, label:'Not Eligible', cls:'round-na'};
+  }
   const r1 = r.r1_close, r2 = r.r2_close, r3 = r.r3_close;
   if (r1 && rank <= Math.round(r1*1.07)) return {round:1, label:'Round 1', cls:'round-1'};
   if (r2 && rank <= Math.round(r2*1.07)) return {round:2, label:'Round 1–2', cls:'round-12'};
   if (r3 && rank <= Math.round(r3*1.07)) return {round:3, label:'Round 2–3', cls:'round-23'};
+
   const ratio = rank/close26;
   if (ratio <= 0.65) return {round:1, label:'Round 1*', cls:'round-1'};
   if (ratio <= 0.85) return {round:2, label:'Round 1–2', cls:'round-12'};
@@ -977,7 +1007,11 @@ function rowHtml(r, hl, rank, rowNum) {
     +'</tr>';
 }
 function roundBadge(rd) {
-  if (!rd || rd.round == null) return '<span class="round-badge round-na">Not Eligible</span>';
+  // Only fall back to the generic "Not Eligible" badge when there's no
+  // result at all -- predictRound can also return round:null for the
+  // "Low Probability" buffer-band case, which has its own label/class
+  // and must not be overwritten here.
+  if (!rd) return '<span class="round-badge round-na">Not Eligible</span>';
   return '<span class="round-badge '+rd.cls+'">'+rd.label+'</span>';
 }
 
@@ -990,6 +1024,12 @@ function goPage(id) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector('[data-nav="'+id+'"]').classList.add('active');
   document.getElementById('pageTitle').textContent = pageTitles[id];
+  // "Prepared for" only matters on pages that generate a student-specific
+  // PDF (Rank Predictor, College Browser, Guided Counsellor). Overview and
+  // Quota Guide are general reference pages with no such export, so the
+  // bar is hidden there instead of showing irrelevant fields.
+  const preparedForPages = {predictor:1, explorer:1, guided:1};
+  document.getElementById('preparedForBar').style.display = preparedForPages[id] ? 'flex' : 'none';
   if (id==='explorer') renderExp();
   if (id==='trends')   renderTrends();
   // On mobile, close the off-canvas menu after navigating.
@@ -1153,19 +1193,23 @@ function runPredictor() {
   showActiveFilters(f);
 
   if (predMode === 'eligible') {
-    // All colleges where predicted 2026 closing >= rank
-    let pool = RAW.filter(r => r.close26 >= rank).sort((a,b)=>a.close26-b.close26);
+    // All colleges where predicted 2026 closing >= rank, PLUS the
+    // low-probability buffer band just below rank (see predictRound) --
+    // those get flagged "Low Probability" per-row rather than excluded.
+    let pool = RAW.filter(r => r.close26 >= lowProbabilityFloor(rank)).sort((a,b)=>a.close26-b.close26);
     predData = applyFilters(pool, f, rank);
     const safe   = predData.filter(r=>r.safe>=rank).length;
     const likely = predData.filter(r=>r.close26>=rank&&r.safe<rank).length;
+    const lowProb = predData.filter(r=>r.close26<rank).length;
     document.getElementById('predictorChips').style.display='flex';
     document.getElementById('predictorChips').innerHTML=
       '<span class="chip chip-green">✔ '+safe+' safe</span>'+
       '<span class="chip chip-amber">~ '+likely+' likely</span>'+
+      (lowProb ? '<span class="chip" style="background:#FFEDD5;color:#9A3412">⚠ '+lowProb+' low probability</span>' : '')+
       '<span class="chip chip-blue">Σ '+predData.length+' total</span>';
     document.getElementById('predictorInfo').style.display='flex';
     document.getElementById('predictorInfoText').textContent=
-      'Green rows = rank within Safe Rank cutoff. All eligible colleges for 2026 shown, sorted by predicted closing rank.';
+      'Green rows = rank within Safe Rank cutoff. Orange "Low Probability" rows are just beyond last year\'s closing rank -- a long shot since seats tend to increase. All eligible colleges for 2026 shown, sorted by predicted closing rank.';
 
   } else {
     // ±N window: sorted by predicted closing rank, find rank position, take N above and below
@@ -1253,15 +1297,50 @@ const DR_EDUZONE_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArwAAAJ2C
 const DR_EDUZONE_INFO = {
   name: "Doctor Eduzone",
   tagline: "\u0938\u093e\u0935\u093f\u0927\u093e \u092f\u093e \u0915\u0932\u093e\u092e\u092f\u0940",
-  // jsPDF's built-in fonts (helvetica) have no Devanagari glyphs, so the
-  // Hindi tagline above renders as mojibake in the PDF. Embedding a custom
-  // Unicode font just for one line of tagline text isn't worth the size/
-  // complexity cost, so the PDF export uses this transliteration instead.
+  // Fallback only: jsPDF's built-in fonts have no Devanagari glyphs, and
+  // even an embedded Devanagari font wouldn't help on its own because
+  // jsPDF doesn't perform the complex-script shaping Devanagari needs
+  // (matras like ि visually attach before their consonant). See
+  // getTaglineImage() below for how the tagline is actually rendered.
   taglineLatin: "Suvidha Ya Kalamayi",
   phones: ["90171-01111", "97296-99663"],
   email: "dreduzonesocialmedia@gmail.com",
   address: "SCO-34, Mughal Canal, Karnal"
 };
+
+// Renders the Hindi tagline through the browser's own canvas text engine
+// (instead of jsPDF's doc.text) and caches the resulting bitmap. Canvas
+// text rendering goes through the OS/browser font-shaping stack, which
+// handles Devanagari correctly (matra reordering, conjuncts, etc.) --
+// something jsPDF's plain glyph placement cannot do even with a
+// Devanagari font embedded. Falls back to null (caller uses
+// taglineLatin instead) if canvas rendering is unavailable for any reason.
+let _taglineImageCache;
+function getTaglineImage() {
+  if (_taglineImageCache !== undefined) return _taglineImageCache;
+  try {
+    const scale = 3; // render above target size for crisp text when scaled down
+    const fontPx = 9 * scale;
+    const fontSpec = 'bold ' + fontPx + 'px "Noto Sans Devanagari","Nirmala UI","Mangal","Kohinoor Devanagari",sans-serif';
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = fontSpec;
+    const width = Math.ceil(ctx.measureText(DR_EDUZONE_INFO.tagline).width) + scale * 4;
+    const height = Math.ceil(fontPx * 1.5);
+    canvas.width = width;
+    canvas.height = height;
+    // Resizing the canvas resets its 2D context, so font/fill must be
+    // re-applied before the actual draw.
+    ctx.font = fontSpec;
+    ctx.fillStyle = '#D97706';
+    ctx.textBaseline = 'top';
+    ctx.fillText(DR_EDUZONE_INFO.tagline, scale * 2, scale * 2);
+    _taglineImageCache = { dataUrl: canvas.toDataURL('image/png'), width, height };
+  } catch (e) {
+    _taglineImageCache = null;
+  }
+  return _taglineImageCache;
+}
 
 // Data-driven PDF export using jsPDF + AutoTable.
 //
@@ -1277,6 +1356,32 @@ const DR_EDUZONE_INFO = {
 // of that: every cell is placed by explicit page-margin math, text wraps
 // instead of overflowing, and there is no raster image to crop -- so
 // nothing can be clipped regardless of screen size or font rendering.
+// Reads the "Prepared for" fields in the topbar. Shared by every PDF
+// export so the report reads as tailor-made for that student and the
+// downloaded filename identifies them, without each of the three export
+// call sites needing to duplicate this logic.
+function getStudentInfo() {
+  const nameEl = document.getElementById('studentName');
+  const phoneEl = document.getElementById('studentPhone');
+  return {
+    name: nameEl ? nameEl.value.trim() : '',
+    phone: phoneEl ? phoneEl.value.trim() : ''
+  };
+}
+
+// Builds the download filename as name_phone (per student request), so a
+// counsellor handling many students can tell reports apart at a glance.
+// Falls back to the old title-based name if neither field is filled in.
+function buildReportFilename(title, studentInfo) {
+  const sanitize = s => s.replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '');
+  const namePart = sanitize(studentInfo.name || '');
+  const phonePart = sanitize(studentInfo.phone || '');
+  if (namePart && phonePart) return namePart + '_' + phonePart + '.pdf';
+  if (namePart) return namePart + '.pdf';
+  if (phonePart) return phonePart + '.pdf';
+  return sanitize(title || 'report') + '.pdf';
+}
+
 function exportRowsToPdf(rows, title, subtitleLines, columns) {
   if (!rows || !rows.length) { alert('No results to export yet.'); return; }
   if (typeof window.jspdf === 'undefined') {
@@ -1338,24 +1443,44 @@ function exportRowsToPdf(rows, title, subtitleLines, columns) {
   // (no text measurement needed since these lines are always short/fixed)
   // so it can be handed to AutoTable's margin.top *before* the table is
   // built, letting continuation pages reserve less space than page 1.
-  const compactHeaderHeight = margin + 42 + 18 + 16 + 10;
+  // 54 = LOGO_SIZE (46) + padding, matching the taller logo block below.
+  const compactHeaderHeight = margin + 54 + 18 + 16 + 10;
+
+  // Bumped up from 32pt so the logo reads clearly at print resolution --
+  // 32pt looked small/blurry once placed at the top of an A4 page.
+  const LOGO_SIZE = 46;
+  const LOGO_TEXT_X = margin + LOGO_SIZE + 10;
 
   const drawHeader = (isFirstPage) => {
     let y = margin;
     try {
       if (DR_EDUZONE_LOGO) {
-        doc.addImage(DR_EDUZONE_LOGO, 'PNG', margin, y, 32, 32);
+        doc.addImage(DR_EDUZONE_LOGO, 'PNG', margin, y, LOGO_SIZE, LOGO_SIZE);
       }
     } catch (e) { /* logo optional; continue without it */ }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(...navy);
-    doc.text(info.name, margin + 40, y + 14);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...amber);
-    doc.text(info.taglineLatin, margin + 40, y + 27);
-    y += 42;
+    doc.text(info.name, LOGO_TEXT_X, y + 20);
+    const taglineImg = getTaglineImage();
+    if (taglineImg) {
+      const dispHeight = 10;
+      const dispWidth = taglineImg.width * (dispHeight / taglineImg.height);
+      try {
+        doc.addImage(taglineImg.dataUrl, 'PNG', LOGO_TEXT_X, y + 28, dispWidth, dispHeight);
+      } catch (e) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(...amber);
+        doc.text(info.taglineLatin, LOGO_TEXT_X, y + 34);
+      }
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...amber);
+      doc.text(info.taglineLatin, LOGO_TEXT_X, y + 34);
+    }
+    y += 54;
     doc.setDrawColor(...teal);
     doc.setLineWidth(2);
     doc.line(margin, y, pageWidth - margin, y);
@@ -1386,7 +1511,15 @@ function exportRowsToPdf(rows, title, subtitleLines, columns) {
     // "rows" (not "columns") is the exported dataset -- always show how
     // many colleges the report covers, so this line doesn't depend on
     // every caller remembering to pass a count themselves.
-    const allLines = [...(subtitleLines || []), 'Colleges in this report: ' + rows.length];
+    const studentInfo = getStudentInfo();
+    const preparedForLine = (studentInfo.name || studentInfo.phone)
+      ? 'Prepared for: ' + [studentInfo.name, studentInfo.phone].filter(Boolean).join(' \u00b7 ')
+      : null;
+    const allLines = [
+      ...(preparedForLine ? [preparedForLine] : []),
+      ...(subtitleLines || []),
+      'Colleges in this report: ' + rows.length
+    ];
     // Filter/analytics lines can get long (many filters chained together),
     // so each one is wrapped to the content width instead of drawn with a
     // single doc.text() call, which would silently run off the page edge.
@@ -1496,7 +1629,8 @@ function exportRowsToPdf(rows, title, subtitleLines, columns) {
   doc.text(`Email: ${info.email}`, margin + thirdWidth, footerY + 16);
   doc.text(`Office: ${info.address}`, margin + thirdWidth * 2, footerY + 16);
 
-  const filename = (title || 'report').replace(/[^\w\-]+/g, '_') + '.pdf';
+  const studentInfo = getStudentInfo();
+  const filename = buildReportFilename(title, studentInfo);
   doc.save(filename);
 }
 
@@ -1626,7 +1760,7 @@ document.getElementById('predDownloadPdf').addEventListener('click', () => {
     analyticsLine = 'Analytics: ' + safe + ' safe | ' + likely + ' likely | ' + predData.length + ' total eligible';
   }
 
-  exportRowsToPdf(predData, 'Rank Predictor Report', ['Rank entered: ' + fmt(rank), modeLine, filtersLine, analyticsLine], [
+  exportRowsToPdf(predData, 'College Predictor Report', ['Rank entered: ' + fmt(rank), modeLine, filtersLine, analyticsLine], [
     {label:'College', get:r=>r.inst},
     {label:'State', get:r=>r.state||'-'},
     {label:'Course', get:r=>r.course},
@@ -2008,8 +2142,11 @@ function renderTrends() {
     const {rank, quota, course, cat} = gState;
     const zone  = gState.zone  || '';
     const state = gState.state || '';
+    // Include the low-probability buffer band just below rank (see
+    // predictRound / lowProbabilityFloor) instead of a hard cutoff at
+    // rank -- rows in that band are labeled "Low Probability" per-row.
     gResults = RAW.filter(r =>
-      r.close26 >= rank && r.quota === quota && r.course === course && r.cat === cat
+      r.close26 >= lowProbabilityFloor(rank) && r.quota === quota && r.course === course && r.cat === cat
       && matchesZone(r, zone)
       && (!state || r.state === state)
     ).sort((a,b) => a.close26-b.close26);
